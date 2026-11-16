@@ -1,7 +1,7 @@
 # Logging
 
 Every line this service writes, like every other Minty backend's (Flask included), has one format,
-defined once in [`minty-shared-py`](https://github.com/minty-oliveandvine/minty-shared-py)
+defined once in [`minty-shared-py`](https://github.com/minty-live/minty-shared-py)
 (`minty_shared.logctx`, pinned in `requirements.txt`; since 2026-10-22):
 
 ```
