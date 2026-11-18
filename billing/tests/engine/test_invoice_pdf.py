@@ -101,7 +101,7 @@ def test_the_page_is_drawn_where_the_frame_draws_it():
     assert bill_date.x + bill_date.width == pytest.approx(RIGHT)
     assert _top(_text(marks, "Company A Limited")) == pytest.approx(244)
     address = _text(marks, "Unit 10, 1/F")
-    assert (_top(address), address.size, address.color) == (pytest.approx(293), 12, (0x73, 0x7A, 0x87))
+    assert (_top(address), address.size, address.color) == (pytest.approx(293), 12, (0x6B, 0x73, 0x80))
     assert _top(_text(marks, "billing@companyalimited.com")) == pytest.approx(380)
 
     description, header = _text(marks, "Description"), _text(marks, "Amount (HKD)")
@@ -110,13 +110,13 @@ def test_the_page_is_drawn_where_the_frame_draws_it():
     assert header.x + header.width == pytest.approx(RIGHT)
 
     first = _text(marks, "Petty cash module only")
-    assert (first.x, _top(first), first.color) == (55, pytest.approx(511), (0x33, 0x3B, 0x45))
+    assert (first.x, _top(first), first.color) == (55, pytest.approx(511), (0x16, 0x20, 0x2E))
     figure = _text(marks, "HKD\u00a0650.32")
     assert (figure.y, figure.x + figure.width) == (first.y, pytest.approx(RIGHT))
 
     rules = [m for m in marks if m.kind == "rule"]
     assert len(rules) == 3
-    assert all((r.x, r.x + r.width, r.color) == (55, 734, (0xE6, 0xE6, 0xE6)) for r in rules)
+    assert all((r.x, r.x + r.width, r.color) == (55, 734, (0xEE, 0xF1, 0xF4)) for r in rules)
 
     total = _text(marks, "HKD\u00a01,330.32")
     assert (total.size, total.color, total.font) == (20, (0x4F, 0xC7, 0xC7), ("Inter", "B"))

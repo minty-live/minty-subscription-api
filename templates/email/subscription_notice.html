@@ -25,16 +25,18 @@
   company name, body copy and the button. Apple Mail resolves them; Gmail and Outlook/Windows do not, and those readers
   get Trebuchet and Helvetica instead. Neither outcome is a bug — see the note in <head>.
 #}
-{% set teal = '#2FC2CA' %}
-{% set teal_button = '#4ECDD5' %}
-{% set amber = '#E9A13B' %}
-{% set body_grey = '#8E979F' %}
+{# The one Minty palette (owner, 2026-11-18): the Minty tokens - link teal,
+   Minty Action for the button, warning ink, the neutral text greys. #}
+{% set teal = '#2e9b9b' %}
+{% set teal_button = '#4fc7c7' %}
+{% set amber = '#EA9713' %}
+{% set body_grey = '#6b7380' %}
 {# Two families, each with the web-safe stack it degrades to. Plus Jakarta Sans is a
    geometric sans and falls back to Trebuchet, the roundest thing in the safe set; Inter
    is a neutral UI sans and falls back to Helvetica, which is what it was drawn against. #}
 {% set heading_font = "'Plus Jakarta Sans','Trebuchet MS',Verdana,Arial,Helvetica,sans-serif" %}
 {% set font = "'Inter','Helvetica Neue',Helvetica,Arial,sans-serif" %}
-{% set title_grey = '#2D3748' %}
+{% set title_grey = '#16202e' %}
 {# Wrapped in a table rather than left as a bare inline-block anchor. Outlook's Word
    rendering engine drops padding and border-radius on an <a>, which collapses the button
    to a line of underlined blue text — the table cell carries both instead, and the
@@ -198,7 +200,7 @@
               <tr>
                 <td style="padding:44px 24px 0;">
                   <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-                         style="border-top:1px solid #E6E6E6;">
+                         style="border-top:1px solid #eef1f4;">
                     <tr>
                       <td style="padding:22px 0 6px;font-family:{{ font }};font-size:11px;font-weight:700;color:{{ body_grey }};">
                         Still to do

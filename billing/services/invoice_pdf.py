@@ -51,14 +51,14 @@ REGULAR, BOLD, SEMIBOLD = ("Inter", ""), ("Inter", "B"), ("InterSemiBold", "")
 ASCENT = 1984 / 2048
 LEADING = 1.21
 
-# Colours, as the frame sets them.
+# Colours: the Minty tokens (owner, 2026-11-18).
 BLACK = (0x00, 0x00, 0x00)
-GREY = (0x73, 0x7A, 0x87)    # the address, the email, the note, the company rows
-INK = (0x33, 0x3B, 0x45)     # the plan lines
+GREY = (0x6B, 0x73, 0x80)    # the address, the email, the note, the company rows
+INK = (0x16, 0x20, 0x2E)     # the plan lines
 HEAD = (0x16, 0x20, 0x2E)    # "Description" / "Amount (HKD)"
 TEAL = (0x4F, 0xC7, 0xC7)    # the total
 LINK = (0x2E, 0x9B, 0x9B)    # the footer's mailbox
-RULE = (0xE6, 0xE6, 0xE6)
+RULE = (0xEE, 0xF1, 0xF4)
 
 # Geometry, px.
 LEFT = 55
