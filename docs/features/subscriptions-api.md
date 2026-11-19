@@ -845,6 +845,20 @@ because from that instant "Pay now" is refused. Every read behind a date is its 
 taken before the dedupe claim, so a failed one sends the email without that detail and never
 leaves the claim's transaction broken.
 
+**Who is warned that a trial ends (2026-11-19).** `checkout.notify_trials_ending` warns the
+trial's payer; with no payer yet it falls back to the company's subscriber
+(`store.subscriber_for_entity`: `entities.subscriber_user_id`, its creator or whoever it was
+handed to) - but only for a trial started on or after 2026-11-13 (`SUBSCRIBER_RULE_FROM`, the
+subscriber rule's start, against the trial rows' `created_at`). That covers every new company and
+an older one that finishes setup now (resuming the wizard gives its creator the subscriber; the
+trial starts at finalize). Trials opened before it - the 4 Nov load - are skipped `no_subscriber`
+even when the company holds a subscriber (owner: who holds those companies is not decided). Without a
+payer there is no card or consent, so it is always the "action needed" email. The card it checks
+is the one put on THIS company (`_trial_has_card(payer, entity_id)` → `store.card_for_entity`),
+the only card the conversion charges: before 2026-11-19 it asked whether the payer had any card
+in Stripe, so a card saved for another company skipped the warning as `will_convert` and the
+trial then expired unwarned.
+
 **The setup reminder (2026-10-01, this service only - Flask never had it).** One email that is not
 about money: `onboarding_reminder`, "Finish setting up {Company} on Minty" (Figma frame 2969:1368
 on page 573:990). `billing/services/onboarding_reminders.py::notify_unfinished_onboarding`, run

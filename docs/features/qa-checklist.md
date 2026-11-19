@@ -177,8 +177,13 @@ Stripe card.
       unchanged. Neither of them is told they succeeded.
 - [ ] A company with one module trialling and another lapsed: Activate on the trial charges
       nothing (no `codes` sent). The lapsed module is bought back only when its code is named.
-- [ ] A trial nobody activates EXPIRES at `trial_end` — access revoked, no invoice — and the
-      trial-ending mail is skipped with `reason: "no_subscriber"` rather than sent to nobody.
+- [ ] A trial nobody activates EXPIRES at `trial_end` — access revoked, no invoice. Its
+      trial-ending mail goes to the company's subscriber (the "action needed" email) when the
+      trial started on or after 2026-11-13 (a new company, or an older one finishing setup now);
+      a trial from before it, or a company with no subscriber, is skipped with
+      `reason: "no_subscriber"` rather than sent to nobody.
+- [ ] A payer with a card saved for ANOTHER company and consent here, but this company on no
+      billing account: still warned (`needs_card`), because the conversion will not charge it.
 - [ ] Manage Subscriptions lists the company while it has no subscriber, with Activate
       Subscription on the row; a cashier on the same company does not see it at all.
 - [ ] An accountant, and an admin who does not pay, see the company on Manage Subscriptions

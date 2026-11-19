@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from minty_db.enums import EntityRole, SystemRole
 from minty_db.models import Entity, User, UserEntity
-from minty_shared import logctx
+from minty_shared import logctx, tokens
 from ninja.security import HttpBearer
 
 from core.roles import is_superadmin
@@ -112,6 +112,17 @@ class BearerAuth(HttpBearer):
                 token, key, algorithms=["HS256"], leeway=CLOCK_SKEW_LEEWAY_SECONDS
             )
             user = User.objects.get(id=payload["user_id"])
+            # The sign-in behind the token (Phase 9, 2026-11-19): signed out of Minty, or 60
+            # minutes without activity, is a 401 here too. Asked at most once a minute per sid
+            # (minty_shared.tokens, v0.8), and the ask keeps the sign-in alive; a token with no
+            # sid (minted before Phase 9) passes until it expires.
+            # Ended - whether the token is still valid or has run out too (below) - the 401 says
+            # so (``reason: session_expired``, owner 2026-11-19), and the app shows "Your session
+            # has expired" instead of handing the person over quietly.
+            if not tokens.session_alive(payload.get("sid"), settings.ACCOUNTS_API_URL, key):
+                logger.info("Auth rejected: the token's sign-in has ended")
+                tokens.mark_session_ended(request)
+                return None
             user_id = payload["user_id"]
             token_entity_id = (payload.get("entity_id") or "").strip()
             header_entity_id = (request.headers.get("X-Entity-Id") or "").strip()
@@ -228,6 +239,8 @@ class BearerAuth(HttpBearer):
             return user
         except jwt.ExpiredSignatureError:
             logger.warning("Auth rejected: token expired")
+            if tokens.session_ended(token, settings.ACCOUNTS_API_URL, settings.SECRET_KEY):
+                tokens.mark_session_ended(request)
             return None
         except (jwt.DecodeError, jwt.InvalidTokenError) as exc:
             logger.warning("Auth rejected: invalid token — %s", exc)

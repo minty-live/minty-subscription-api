@@ -928,7 +928,8 @@ def _entity_names_for_notice(entity_ids) -> dict[str, str]:
 
 
 def notify_trials_ending(days_before: int = 7, limit: int | None = None) -> dict:
-    """Warn payers about trials that end in ``days_before`` days.
+    """Warn payers - or, before billing is confirmed, the company's subscriber - about trials
+    that end in ``days_before`` days.
 
     THE ONLY NOTIFICATION IN THE SYSTEM THAT CAN PREVENT A LAPSE. Every other billing email
     reports something that has already happened — a payment that failed or recovered, a
@@ -1009,9 +1010,20 @@ def notify_trials_ending(days_before: int = 7, limit: int | None = None) -> dict
             # that has one, and the notice would then be keyed on, and addressed to,
             # nobody.
             payer = next((r.payer_user_id for r in rows if r.payer_user_id), None)
+            # No payer yet: the company's SUBSCRIBER (``entities.subscriber_user_id`` - its
+            # creator, or whoever it was handed to; owner, 2026-11-13) is the one person who
+            # can still confirm billing, so they are told. Without a payer there is no card
+            # and no consent, so this is always the "action needed" email.
+            # Only for trials started since that rule (owner, 2026-11-19): a new company's,
+            # or an older one's that finishes setup now (going back into the wizard gives its
+            # creator the subscriber, and the trial starts at finalize). Trials opened before
+            # it (the 4 Nov load) are left: who should hold those companies is not decided.
+            if not payer and min(r.created_at for r in rows) >= SUBSCRIBER_RULE_FROM:
+                payer = store.subscriber_for_entity(entity_id)
             if not payer:
-                # A trial nobody has agreed to pay for has nobody to tell. It expires
-                # at term end (``_convert_due_trials``); reported, never swallowed.
+                # Nobody to tell: no payer, and no subscriber on a trial started since the
+                # rule. It expires at term end (``_convert_due_trials``); reported, never
+                # swallowed.
                 skipped.append({"entity_id": entity_id, "reason": "no_subscriber"})
                 continue
             codes = sorted(row.function_code.upper() for row in rows)
@@ -1028,7 +1040,9 @@ def notify_trials_ending(days_before: int = 7, limit: int | None = None) -> dict
                 # notices that told them apart were removed 2026-10-01). Both flags stay
                 # because the SEND gates on them: either one means the trial lapses,
                 # and neither means there is nothing to say.
-                "needs_card": not _trial_has_card(payer),
+                # THIS company's card - the only one the conversion charges
+                # (``store.card_for_entity``), not any card the payer has saved.
+                "needs_card": not _trial_has_card(payer, entity_id),
                 "needs_consent": not store.has_billing_consent(entity_id, payer),
             }
             if not (context["needs_card"] or context["needs_consent"]):
@@ -1074,6 +1088,12 @@ def _notify_module():
     from billing.services import notify
 
     return notify
+
+
+#: When "whoever creates a company holds its subscription" began (minty-db v0.9, owner
+#: 2026-11-13). The trial-ending warning falls back to the subscriber only for trials
+#: started from then on (owner, 2026-11-19).
+SUBSCRIBER_RULE_FROM = datetime(2026, 11, 13, tzinfo=UTC)
 
 
 def _trial_has_card(payer_user_id, entity_id=None) -> bool:

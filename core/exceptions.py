@@ -18,6 +18,7 @@ declined" into "something went wrong".
 
 import logging
 
+from minty_shared import tokens
 from ninja.errors import AuthenticationError
 from ninja.errors import ValidationError as SchemaValidationError
 
@@ -118,8 +119,14 @@ def register_exception_handlers(api):
         it; without this one the commonest status the portal meets - an expired token -
         arrives in a shape ``payerPortal.ts`` cannot read. Flask's ``_unauthorized``
         answers ``{"error": ...}`` on exactly this path. Matched.
+
+        Plus ``"reason": "session_expired"`` when the sign-in behind the token has ended
+        (core/auth.py, owner 2026-11-19): the app then says the session has expired instead of
+        handing the person over quietly.
         """
-        return api.create_response(request, {"error": "Unauthorized"}, status=401)
+        return api.create_response(
+            request, {"error": "Unauthorized", **tokens.unauthorized_reason(request)}, status=401
+        )
 
     @api.exception_handler(SchemaValidationError)
     def on_schema_validation(request, exc):

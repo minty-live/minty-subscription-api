@@ -9,4 +9,6 @@ text; under test, this service's code comparing a UUID with uuid text raises ins
 not matching.
 """
 
-pytest_plugins = ["minty_db.testing.pg", "minty_db.testing.uuid_guard"]
+# minty_shared.testing.sessions (Phase 9): no test reaches accounts-api's session touch; every
+# sign-in lives unless a test ends it (``hub_sessions.end(sid)``).
+pytest_plugins = ["minty_db.testing.pg", "minty_db.testing.uuid_guard", "minty_shared.testing.sessions"]

@@ -65,6 +65,40 @@ def test_unknown_user_is_refused(client, db):
     assert res.status_code == 401
 
 
+def test_a_token_whose_sign_in_has_ended_is_refused(client, user, entity, hub_sessions):
+    # Signed out of Minty, or 60 minutes without activity (Phase 9): both doors end with it.
+    hub_sessions.end("gone")
+    res = client.get("/api/me/subscriptions", **_bearer(make_token(user.id, sid="gone")))
+    # The reason (owner, 2026-11-19): the app says "Your session has expired", never renews.
+    assert res.status_code == 401 and res.json() == {"error": "Unauthorized", "reason": "session_expired"}
+    res = client.get(f"/api/entities/{entity.id}/modules", **_bearer(make_token(user.id, entity_id=entity.id, sid="gone")))
+    assert res.status_code == 401 and res.json()["reason"] == "session_expired"
+
+
+def test_an_expired_token_whose_sign_in_has_ended_says_so(client, user, hub_sessions):
+    # The usual case after 60 idle minutes: the token ran out AND the sign-in ended.
+    hub_sessions.end("gone")
+    res = client.get("/api/me/subscriptions", **_bearer(make_token(user.id, minutes=-60, sid="gone")))
+    assert res.status_code == 401 and res.json() == {"error": "Unauthorized", "reason": "session_expired"}
+
+
+def test_an_expired_token_whose_sign_in_lives_is_renewed_quietly(client, user, hub_sessions):
+    res = client.get("/api/me/subscriptions", **_bearer(make_token(user.id, minutes=-60, sid="s1")))
+    assert res.status_code == 401 and res.json() == {"error": "Unauthorized"}
+    assert hub_sessions.calls == ["s1"]
+
+
+def test_a_live_sign_in_is_kept_alive_at_most_once_a_minute(client, user, hub_sessions):
+    for _ in range(2):
+        assert client.get("/api/me/subscriptions", **_bearer(make_token(user.id, sid="s1"))).status_code == 200
+    assert hub_sessions.calls == ["s1"]
+
+
+def test_a_token_from_before_the_sid_is_accepted_until_it_expires(client, user, hub_sessions):
+    res = client.get("/api/me/subscriptions", **_bearer(make_token(user.id, sid="")))
+    assert res.status_code == PORTAL_ACCEPTED and hub_sessions.calls == []
+
+
 def test_missing_bearer_is_refused(client, db):
     assert client.get("/api/me/subscriptions").status_code == 401
     assert client.get("/api/me/subscriptions", HTTP_AUTHORIZATION="Basic abc").status_code == 401

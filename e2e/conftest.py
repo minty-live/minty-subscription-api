@@ -73,7 +73,8 @@ def mint(secret: str, user_id: str, *, entity_id: str = "", minutes: int = 30, *
         "role": "admin",
         "system_role": "normal",
         "module": "billing",
-        "sid": "e2e",
+        # No sid: a made-up one names no Minty sign-in, and every API now refuses it (Phase 9).
+        "sid": "",
         "billing_enabled": True,
         "petty_cash_enabled": True,
         "exp": now + timedelta(minutes=minutes),

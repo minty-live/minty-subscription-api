@@ -1219,7 +1219,9 @@ def test_a_trial_that_will_convert_cleanly_is_not_warned_at_all(app, db_session,
             trial_end=datetime(2026, 8, 20, 5, 0, tzinfo=UTC),
         )
 
-        monkeypatch.setattr(checkout, "_trial_has_card", lambda uid: True)
+        # A card put on THIS company - the one a conversion charges - not just any card.
+        monkeypatch.setattr(checkout, "_trial_has_card",
+                            lambda uid, entity_id=None: entity_id == _company(db_session, "e1"))
         monkeypatch.setattr(checkout.store, "has_billing_consent",
                             lambda eid, uid: True)
         monkeypatch.setattr(
@@ -1250,7 +1252,7 @@ def test_a_trial_blocked_only_on_consent_is_still_warned(app, db_session, monkey
             trial_end=datetime(2026, 8, 20, 5, 0, tzinfo=UTC),
         )
 
-        monkeypatch.setattr(checkout, "_trial_has_card", lambda uid: True)
+        monkeypatch.setattr(checkout, "_trial_has_card", lambda uid, entity_id=None: True)
         monkeypatch.setattr(checkout.store, "has_billing_consent",
                             lambda eid, uid: False)
         monkeypatch.setattr(
@@ -1423,6 +1425,158 @@ def test_the_same_payer_is_still_only_warned_once(app, db_session, mail, monkeyp
         checkout.notify_trials_ending(days_before=3)
 
         assert SubscriptionEmailLog.objects.filter(event="trial_ending").count() == 1
+
+
+def test_a_trial_with_a_subscriber_but_no_payer_warns_the_subscriber(
+    app, db_session, mail, monkeypatch
+):
+    """Whoever creates a company holds its subscription (``entities.subscriber_user_id``,
+    owner 2026-11-13) - but becomes its payer only by confirming billing. A trial whose
+    subscriber never confirmed is the one most certain to lapse, so it is warned: to the
+    subscriber, and always "action needed" (no payer means no card and no consent)."""
+    checkout = pytest.importorskip("billing.services.checkout")
+    from minty_db.models import EntityModuleSubscription, SubscriptionEmailLog
+
+    with app.app_context():
+        subscriber = _make_payer(db_session, email="creator@test.com")
+        entity = _company(db_session, "e_sub", subscriber_user_id=subscriber)
+        EntityModuleSubscription.objects.create(
+            id=uuid.uuid4(), entity_id=entity, function_code="PETTY_CASH",
+            payer_user_id=None, phase="trial",
+            trial_end=datetime(2026, 8, 20, 5, 0, tzinfo=UTC),
+        )
+        monkeypatch.setattr(
+            checkout.clock, "now", lambda: datetime(2026, 8, 17, 8, 10, tzinfo=UTC)
+        )
+
+        result = checkout.notify_trials_ending(days_before=3)
+
+        assert result["warned"] == [
+            {"entity_id": entity, "codes": ["PETTY_CASH"], "needs_card": True}
+        ]
+        log = SubscriptionEmailLog.objects.get(event="trial_ending")
+        assert log.user_id == subscriber
+        assert log.dedupe_key.startswith(f"{subscriber}:{entity}:")
+        assert [m.to for m in mail.sent] == [["creator@test.com"]]
+
+
+def test_a_trial_with_neither_subscriber_nor_payer_is_still_skipped(
+    app, db_session, mail, monkeypatch
+):
+    """A company from before minty-db v0.9 (the loaded ones) has nobody assigned, and who
+    should be is not decided yet (owner, 2026-11-19), so nobody is mailed."""
+    checkout = pytest.importorskip("billing.services.checkout")
+    from minty_db.models import EntityModuleSubscription
+
+    with app.app_context():
+        entity = _company(db_session, "e_nobody")
+        EntityModuleSubscription.objects.create(
+            id=uuid.uuid4(), entity_id=entity, function_code="PETTY_CASH",
+            payer_user_id=None, phase="trial",
+            trial_end=datetime(2026, 8, 20, 5, 0, tzinfo=UTC),
+        )
+        monkeypatch.setattr(
+            checkout.clock, "now", lambda: datetime(2026, 8, 17, 8, 10, tzinfo=UTC)
+        )
+
+        result = checkout.notify_trials_ending(days_before=3)
+
+        assert result["warned"] == []
+        assert result["skipped"] == [{"entity_id": entity, "reason": "no_subscriber"}]
+        assert mail.sent == []
+
+
+def test_a_trial_started_before_13_nov_is_not_warned_through_its_subscriber(
+    app, db_session, mail, monkeypatch
+):
+    """Only trials started since the subscriber rule (2026-11-13) are warned through the
+    subscriber (owner, 2026-11-19). A trial opened before it (the 4 Nov load) can sit on a
+    company that holds a subscriber, but who should hold those companies is not decided."""
+    checkout = pytest.importorskip("billing.services.checkout")
+    from minty_db.models import EntityModuleSubscription
+
+    with app.app_context():
+        subscriber = _make_payer(db_session, email="old-creator@test.com")
+        entity = _company(db_session, "e_old_sub", subscriber_user_id=subscriber,
+                          created_at=datetime(2026, 6, 10, tzinfo=UTC))
+        EntityModuleSubscription.objects.create(
+            id=uuid.uuid4(), entity_id=entity, function_code="PETTY_CASH",
+            payer_user_id=None, phase="trial",
+            trial_end=datetime(2026, 8, 20, 5, 0, tzinfo=UTC),
+            created_at=datetime(2026, 11, 12, 23, 59, tzinfo=UTC),
+        )
+        monkeypatch.setattr(
+            checkout.clock, "now", lambda: datetime(2026, 8, 17, 8, 10, tzinfo=UTC)
+        )
+
+        result = checkout.notify_trials_ending(days_before=3)
+
+        assert result["warned"] == []
+        assert result["skipped"] == [{"entity_id": entity, "reason": "no_subscriber"}]
+        assert mail.sent == []
+
+
+def test_an_older_company_that_finishes_setup_now_is_warned_through_its_subscriber(
+    app, db_session, mail, monkeypatch
+):
+    """A company created before 13 Nov and still in setup gets its subscriber on going back
+    into the wizard (``entity_create``), and its trial starts when setup finishes - so it is
+    treated like a new company (owner, 2026-11-19)."""
+    checkout = pytest.importorskip("billing.services.checkout")
+    from minty_db.models import EntityModuleSubscription
+
+    with app.app_context():
+        subscriber = _make_payer(db_session, email="resumed@test.com")
+        entity = _company(db_session, "e_resumed", subscriber_user_id=subscriber,
+                          created_at=datetime(2026, 10, 1, tzinfo=UTC))
+        EntityModuleSubscription.objects.create(
+            id=uuid.uuid4(), entity_id=entity, function_code="PETTY_CASH",
+            payer_user_id=None, phase="trial",
+            trial_end=datetime(2026, 8, 20, 5, 0, tzinfo=UTC),
+            created_at=datetime(2026, 11, 13, 0, 0, tzinfo=UTC),
+        )
+        monkeypatch.setattr(
+            checkout.clock, "now", lambda: datetime(2026, 8, 17, 8, 10, tzinfo=UTC)
+        )
+
+        result = checkout.notify_trials_ending(days_before=3)
+
+        assert [w["entity_id"] for w in result["warned"]] == [entity]
+        assert [m.to for m in mail.sent] == [["resumed@test.com"]]
+
+
+def test_a_card_on_another_company_does_not_count_as_this_trials_card(
+    app, db_session, mail, monkeypatch
+):
+    """The conversion charges only the card put on THIS company (``store.card_for_entity``).
+    The warning used to ask whether the payer had a card anywhere, so a payer with a card on
+    another company and consent here was skipped as "will convert" - and the trial then
+    expired with no warning at all."""
+    checkout = pytest.importorskip("billing.services.checkout")
+    from minty_db.models import EntityModuleSubscription
+
+    with app.app_context():
+        payer = _make_payer(db_session)
+        entity = _company(db_session, "e_other_card", subscriber_user_id=payer)
+        EntityModuleSubscription.objects.create(
+            id=uuid.uuid4(), entity_id=entity, function_code="PAYMENT_REQUEST",
+            payer_user_id=payer, phase="trial",
+            trial_end=datetime(2026, 8, 20, 5, 0, tzinfo=UTC),
+        )
+        # The payer's Stripe customer has a card (saved for some other company) ...
+        monkeypatch.setattr(checkout, "_resolve_customer_id", lambda uid: "cus_1")
+        monkeypatch.setattr(checkout, "trial_payment_method", lambda cid: "pm_elsewhere")
+        # ... and agreed to pay for this one, but never put it on a billing account.
+        monkeypatch.setattr(checkout.store, "has_billing_consent", lambda eid, uid: True)
+        monkeypatch.setattr(
+            checkout.clock, "now", lambda: datetime(2026, 8, 17, 8, 10, tzinfo=UTC)
+        )
+
+        result = checkout.notify_trials_ending(days_before=3)
+
+        assert result["warned"] == [
+            {"entity_id": entity, "codes": ["PAYMENT_REQUEST"], "needs_card": True}
+        ]
 
 
 # ---------------------------------------------------------------------------

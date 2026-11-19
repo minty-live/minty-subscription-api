@@ -56,11 +56,26 @@ rule carries it, and nobody but the payer may act.
 
 ## Refresh
 
-There is none. minty-payment-request-api re-mints on `/auth/token/refresh`; this service does not,
-because Flask stays the single minter (rule 1) and its 24-hour session outlives the 30-minute
-token. A lapsed token sends `minty-web` to Flask's login-gated
+There is none, here or anywhere (minty-payment-request-api's `/auth/token/refresh` is gone,
+Phase 9): accounts-api stays the single minter (rule 1), and its session - signed out after 60
+minutes without activity - outlives the 30-minute token while the person is active. A lapsed token sends `minty-web` to Flask's login-gated
 `GET /handoff/minty-web?next=<path>&entity_id=…` (Part 2 step 5), which mints the same token
 and lands back on the page — silent while the Flask session is alive, a login when it is not.
+
+## The sign-in behind the token (Phase 9, 2026-11-19)
+
+Every door (`core/auth.BearerAuth`, so `SelfBearerAuth`, `EntityBearerAuth` and the notice's
+auth too) asks `minty_shared.tokens.session_alive(sid, ACCOUNTS_API_URL, SECRET_KEY)` once the
+user is loaded: minty-accounts-api's `POST /api/internal/session/touch`, at most once a minute
+per `sid` per process, which also keeps the sign-in alive. Signed out of Minty, or 60 minutes
+without activity: 401 `{"error": "Unauthorized"}`, and minty-web hands the person over again.
+A token with no `sid` passes until it expires; accounts-api unreachable is logged at ERROR and
+the token honoured. When the sign-in has ENDED - the token still valid, or run out too
+(`minty_shared.tokens.session_ended`, owner 2026-11-19) - the 401 is `{"error": "Unauthorized",
+"reason": "session_expired"}` and the app says the session has expired instead of handing over
+quietly; any other 401 carries no reason. Needs minty-shared **v0.8** (this repo pins v0.6 - bump
+it with the release).
+minty-accounts-api's authentication.md section 3.3 is the whole design.
 
 ## Server-to-server
 
