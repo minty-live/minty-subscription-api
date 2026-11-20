@@ -128,6 +128,12 @@ def register_exception_handlers(api):
             request, {"error": "Unauthorized", **tokens.unauthorized_reason(request)}, status=401
         )
 
+    @api.exception_handler(tokens.SessionCheckUnavailableError)
+    def on_session_check_unavailable(request, exc):
+        # minty-shared v0.9 (owner, 2026-11-19): accounts-api cannot say whether the sign-in lives
+        # and it was not confirmed in the last 5 minutes - the request is refused, nobody is signed out
+        return api.create_response(request, {"error": str(exc)}, status=503)
+
     @api.exception_handler(SchemaValidationError)
     def on_schema_validation(request, exc):
         # The structured errors stay in the log; the body carries the sentence. 400, as

@@ -75,6 +75,16 @@ def test_a_token_whose_sign_in_has_ended_is_refused(client, user, entity, hub_se
     assert res.status_code == 401 and res.json()["reason"] == "session_expired"
 
 
+def test_accounts_api_unreachable_refuses_a_sign_in_not_confirmed_lately_with_a_503(client, user, entity,
+                                                                                   hub_sessions):
+    # minty-shared v0.9 (owner, 2026-11-19): a short grace, then refuse - never a sign-out. Both doors.
+    hub_sessions.unreachable()
+    res = client.get("/api/me/subscriptions", **_bearer(make_token(user.id, sid="s1")))
+    assert res.status_code == 503 and res.json() == {"error": "Minty can't check your sign-in just now. Try again in a minute."}
+    res = client.get(f"/api/entities/{entity.id}/modules", **_bearer(make_token(user.id, entity_id=entity.id, sid="s1")))
+    assert res.status_code == 503 and res.json() == {"error": "Minty can't check your sign-in just now. Try again in a minute."}
+
+
 def test_an_expired_token_whose_sign_in_has_ended_says_so(client, user, hub_sessions):
     # The usual case after 60 idle minutes: the token ran out AND the sign-in ended.
     hub_sessions.end("gone")

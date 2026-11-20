@@ -70,7 +70,7 @@ user is loaded: minty-accounts-api's `POST /api/internal/session/touch`, at most
 per `sid` per process, which also keeps the sign-in alive. Signed out of Minty, or 60 minutes
 without activity: 401 `{"error": "Unauthorized"}`, and minty-web hands the person over again.
 A token with no `sid` passes until it expires; accounts-api unreachable is logged at ERROR and
-the token honoured. When the sign-in has ENDED - the token still valid, or run out too
+(minty-shared v0.9, owner 2026-11-19: "short grace, then refuse") the token is honoured only while that sign-in was confirmed alive in the last 5 minutes, then the request is refused 503 "Minty can't check your sign-in just now. Try again in a minute." (`SessionCheckUnavailableError`) - nobody is signed out by an outage, and a sign-in known to have ended stays ended (`core/exceptions.py`, both doors). When the sign-in has ENDED - the token still valid, or run out too
 (`minty_shared.tokens.session_ended`, owner 2026-11-19) - the 401 is `{"error": "Unauthorized",
 "reason": "session_expired"}` and the app says the session has expired instead of handing over
 quietly; any other 401 carries no reason. Needs minty-shared **v0.8** (this repo pins v0.6 - bump
